@@ -1,0 +1,89 @@
+#+title: AI of WeChat's Jump
+#+author: E-Neo
+
+#+startup: beamer
+
+#+latex_class: beamer
+#+latex_class_options: [bigger]
+#+latex_header: \usepackage{xeCJK}
+#+latex_header: \usepackage{minted}
+#+latex_header: \usepackage{color}
+#+options: h:2 toc:t
+
+#+beamer_header: \AtBeginSection[]{
+#+beamer_header: \begin{frame}<beamer>\frametitle{Outline}\tableofcontents[currentsection]\end{frame}
+#+beamer_header: \subsection{}
+#+beamer_header: }
+
+* 游戏简介
+
+** 跳一跳
+
+*** 开始画面                                                                    :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+    #+caption: 微信“跳一跳”
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/jump_start.png]]
+*** 游戏画面                                                                    :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+    #+caption: 游戏画面
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/jump_game.png]]
+
+** 游戏体验
+
+   - 个人感觉类似 Flappy Bird
+   - 低成本小游戏但集成在社交软件中容易推广
+   - 有时音效会消失（可能是个 bug）
+
+* 解决思路
+
+** 总体方向
+
+   破解一个游戏实质上就是使用计算机代替人类完成相应的操作。
+   （计算机科学中很多问题都是这样，例如网络爬虫，也可以上纲上线到 Turing test）
+   具体到“跳一跳”游戏可以在不同层次完成这一操作，相应的破解方法如下：
+   - 抓包，分析出客户端与服务器的沟通协议，然后给服务器发送伪造的数据（可能会被封号）；
+   - *使用 Android/iOS 的 API，通过对游戏画面、音效的分析，在客户端进行操作。*
+
+** 软件架构
+
+   - 前端：与游戏客户端进行交互（获取游戏画面、长按屏幕）
+   - 后段：对获取到的游戏画面进行分析并计算出长按屏幕的时长
+
+** 前端（Android）
+
+   可以使用以下两种方式获取游戏画面：
+   - 虚拟机（暂不考虑）
+   - *adb*
+
+** 前端（adb）
+
+   The Android Debug Bridge (ADB) is a toolkit included in the Android SDK package.
+   It consists of both client and server-side programs that communicate with one another.
+
+   可能会用到的一些操作：
+   #+begin_src shell
+adb devices
+adb shell screencap -p | sed 's/\r$//' > tmp.png
+adb shell input swipe 50 50 50 50 600
+adb kill-server
+   #+end_src
+
+   这样前端基本完成了。
+
+** 后端（重点）
+
+   工作流程：
+   1. 从前端获取游戏画面；
+   2. 识别出玩家（i），获取当前位置；
+   3. *识别出目标（d），获取目标位置；* （难点）
+   4. 通过 i 与 d 的距离计算出长按屏幕时间并交付前端。
+
+** End
+
+   *Thank you for your attention.*

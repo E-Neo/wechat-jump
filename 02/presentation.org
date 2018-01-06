@@ -1,0 +1,216 @@
+#+title: AI of WeChat's Jump
+#+author: E-Neo
+
+#+startup: beamer
+
+#+latex_class: beamer
+#+latex_class_options: [bigger]
+#+latex_header: \usepackage{xeCJK}
+#+latex_header: \usepackage{minted}
+#+latex_header: \setminted{fontsize=\scriptsize}
+#+latex_header: \usepackage{color}
+#+options: h:2 toc:t
+
+* 遇到的问题与解决方案
+
+** 背景色与目标接近边缘检测错误
+
+*** img                                                                         :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 游戏画面
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/img018.png]]
+
+*** p_img                                                                       :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 处理后的图像
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/p_img018.png]]
+
+** 解决方案
+
+   修改 =process()= 函数：
+   将：
+   #+begin_src python
+    img = img.convert('L').filter(ImageFilter.CONTOUR)
+   #+end_src
+   调整为：
+   #+begin_src python
+    img = img.filter(ImageFilter.CONTOUR).convert('L')
+   #+end_src
+   避免转化为灰度图后丢失有价值信息。
+
+** 效果对比
+
+*** p_img                                                                       :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 修改前
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/p_img018.png]]
+
+*** pp_img                                                                      :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 修改后
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/pp_img018.png]]
+
+** 将盒子侧棱误判为盒盖
+
+*** img                                                                         :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 游戏画面
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/img088.png]]
+
+*** p_img                                                                       :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 处理后的图像
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/p_img088.png]]
+
+** 解决方案
+
+   =find_d_right()= 函数中：
+   原先监测到目标最右端之后会沿边缘一直向下行走，导致将侧棱误判为盒盖。
+   修改后：
+   #+begin_src python
+        else:
+            while pixel[i, j] != 0:
+                i = i - 1
+            k = j
+            while pixel[i, k] == 0:
+                k = k + 1
+            if k - j > 10:
+                k = j + 2
+            return i, (j + k) >> 1
+   #+end_src
+
+** 效果对比
+
+*** p_img                                                                       :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 修改前
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/p_img088.png]]
+
+*** pp_img                                                                      :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 修改后
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/pp_img088.png]]
+
+** 目标不一定是最高点
+
+*** img                                                                         :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 游戏画面
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/img057.png]]
+
+*** p_img                                                                       :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 处理后的图像
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/p_img057.png]]
+
+** 解决方案
+
+   - 原先寻找目标的方法是：从上往下扫描，找到第一个黑色的像素点即判定为目标物体的最高点。
+   - 将其修改为：在不包含 i 的区域内，从上往下扫描，找到第一个黑色的像素点即判定为目标物体的最高点。
+
+** 效果对比
+
+*** p_img                                                                       :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 修改前
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/p_img057.png]]
+
+*** pp_img                                                                      :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 修改后
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/pp_img057.png]]
+
+** 游戏中其他标识与 i 颜色接近
+
+*** img                                                                         :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 游戏画面
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/img033.png]]
+
+*** p_img                                                                       :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 处理后的图像
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/p_img033.png]]
+
+** 解决方案
+
+   重新限定 i 的检测范围，越过底部标识。
+
+** 效果对比
+
+*** p_img                                                                       :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+
+    #+caption: 修改前
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/p_img033.png]]
+
+*** pp_img                                                                      :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.45
+    :END:
+    #+caption: 修改后
+    #+attr_latex: :height 0.7\textheight
+    [[file:img/pp_img033.png]]
+
+** End
+
+   *Thank you for your attention!*
