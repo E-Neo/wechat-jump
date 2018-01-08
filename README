@@ -6,3 +6,10 @@ wechat-jump
 
 虽然没有任何高级的技术，但是设计过程可以参考，我以 presentation 的形式记录了
 整个开发过程，具体可见每个目录中的 presentation.pdf
+
+Requirements
+------------
+
+adb (pacman -S android-tools)
+Python3 (pacman -S python)
+Pillow (pip install Pillow)

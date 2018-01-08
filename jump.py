@@ -2,6 +2,7 @@ import subprocess
 import io
 import os
 import math
+import random
 import time
 from PIL import Image, ImageFilter, ImageDraw
 
@@ -14,7 +15,12 @@ def get_screen():
 
 
 def jump(duration):
-    subprocess.run("adb shell input swipe 0 0 0 0 " + str(duration),
+    subprocess.run("adb shell input swipe {} {} {} {} {}"
+                   .format(random.randrange(300, 400),
+                           random.randrange(900, 1000),
+                           random.randrange(300, 400),
+                           random.randrange(900, 1000),
+                           duration),
                    shell=True)
 
 
@@ -34,22 +40,6 @@ def process(img):
     img = img.filter(ImageFilter.CONTOUR).convert('L')
     threshold = 230
     img = img.point(lambda x: 0 if x < threshold else 255, mode='1')
-    return img
-
-
-def new_process(img):
-    def is_background(x, t, b):
-        return (x[0] >= b[0]) & (x[0] <= b[0])\
-            & (x[1] >= b[1]) & (x[1] <= b[1])\
-            & (x[2] >= b[2]) & (x[2] <= b[2])
-    w, h = img.size
-    pixel = img.load()
-    t, b = pixel[0, 0], pixel[0, h - 1]
-    img = img.convert('RGB').point(lambda x: [255, 255, 255]
-                                   if is_background(x, t, b) else x)
-    # img = img.convert('L').filter(ImageFilter.CONTOUR)
-    # threshold = 230
-    # img = img.point(lambda x: 0 if x < threshold else 255, mode='1')
     return img
 
 
