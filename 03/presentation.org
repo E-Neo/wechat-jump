@@ -1,0 +1,66 @@
+#+title: Deep Reinforcement learning
+#+author: E-Neo
+
+#+startup: beamer
+
+#+latex_class: beamer
+#+latex_class_options: [bigger]
+#+latex_header: \usepackage{xeCJK}
+#+latex_header: \usepackage{minted}
+#+latex_header: \setminted{fontsize=\scriptsize}
+#+latex_header: \usepackage{color}
+#+options: h:2 toc:t
+
+* Basics
+** Neural Network
+   A neural network is a massively parallel distributed processor made up of simple
+   processing units that has a natural propensity for storing experiential knowledge
+   and making it available for use. It resembles the brain in two respects:
+   1. Knowledge is acquired by the network from its environment through a learning process.
+   2. Inter-neuron connection strengths, known as synaptic weights, are used to store
+      the acquired knowledge.
+** Learning Processes
+   1. Supervised learning
+   2. Unsupervised learning
+   3. Reinforcement learning
+** Reinforcement learning
+   #+caption: Block diagram of an agent interaction with its environment.
+   [[file:img/rl.pdf]]
+** TensorFlow
+   TensorFlow is an open source software library for high performance numerical computation.
+   Its flexible architecture allows easy deployment of computation across a variety of platforms
+   (CPUs, GPUs, TPUs), and from desktops to clusters of servers to mobile and edge devices.
+** Keras
+   Keras is a high-level neural networks API, written in Python and capable of running on top of TensorFlow,
+   CNTK, or Theano. It was developed with a focus on enabling fast experimentation.
+   Being able to go from idea to result with the least possible delay is key to doing good research.
+   #+caption: Keras Logo
+   #+attr_latex: :width 128pt
+   [[file:img/keras-logo-2018-large-1200.png]]
+** Gym
+   Gym is a toolkit for developing and comparing reinforcement learning algorithms.
+   It supports teaching agents everything from walking to playing games like Pong or Pinball.
+* Things to do
+** Reading
+   - Neural Networks and Learning Machines (Chapter 4, 12)
+   - Hands-On Machine Learning with Scikit-Learn and TensorFlow (Relevant chapters)
+** Programming
+   1. 熟悉 TensorFlow 和 Gym
+   2. 用 TensorFlow 实现 Playing Atari with Deep Reinforcement Learning 中的神经网络
+   3. 将 WeChat-Jump 封装成类似 Gym 的接口并尝试用 2 中的神经网络进行游戏
+* References
+** References
+   - Simon Haykin, Neural Networks and Learning Machines (3rd Edition)
+   - Mnih Volodymyr, Koray Kavukcuoglu, David Silver, Andrei A. Rusu,
+     Joel Veness, Marc G. Bellemare, Alex Graves, Martin Riedmiller,
+     Andreas K. Fidjeland, Georg Ostrovski, Stig Petersen, Charles Beattie,
+     Amir Sadik, Ioannis Antonoglou, Helen King, Dharshan Kumaran, Daan Wierstra,
+     Shane Legg, and Demis Hassabis.
+     Human-level Control through Deep Reinforcement Learning. Nature, 529-33, 2015.
+   - Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Alex Graves, Ioannis Antonoglou,
+     Daan Wierstra, and Martin Riedmiller.
+     Playing Atari with Deep Reinforcement Learning. NIPS, Deep Learning workshop
+** References
+   - Kevin Chen. Deep Reinforcement Learning for Flappy Bird
+   - https://tensorflow.google.cn/
+   - https://keras.io/
