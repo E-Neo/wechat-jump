@@ -1,0 +1,544 @@
+#+title: 基于深度增强学习的\\
+#+title: 简单视频游戏自动操作方法研究
+#+author: E-Neo
+
+#+latex_class: article
+#+latex_class_options: [11pt,a4paper]
+#+latex_header: \usepackage{xeCJK}
+#+latex_header: \usepackage{algorithm}
+#+latex_header: \usepackage{algorithmic}
+#+latex_header: \usepackage{indentfirst}
+#+latex_header: \setlength\parindent{2em}
+#+options: toc:t
+
+* 数学模型与算法
+  增强学习(reinforcement learning)与经典的有监督学习(supervised learning)和无监督学习(unsupervised learning)
+  有所不同，增强学习是一个玩家(Agent)与环境(Environment)交互的一个过程，
+  玩家要在这样一个交互过程中实现某种目标或者优化某种参数(例如：使游戏的得分最大化、使图像识别的误判率最小化等等)。
+  环境可以是现实世界的真实环境，也可以是虚拟环境，它通常充满随机性，有一定的随机误差。
+  玩家通过传感器获取环境的状态(state)或观测值(observation)，
+  通过对从环境得到的状态信息进行分析作出优化的决策(policy)，
+  在决策的指导下产生动作(action)，玩家的动作会对环境施加影响，改变环境的状态，同时环境会对玩家的行为作出评价(cost)或奖励(reward)，
+  玩家结合本次评价与历史的状态和评价信息进一步对决策进行优化\cite{haykin2009neural}，整个过程如图[[img:rl]]所示。
+  #+caption: 增强学习玩家(Agent)与环境(Environment)的交互过程。
+  #+name: img:rl
+  #+attr_latex: :placement [H]
+  [[file:img/rl.pdf]]
+  这一过程可以用数学语言形式化描述\cite{DBLP:journals/corr/MnihKSGAWR13}：
+  玩家\(\text{Agent}\)通过一系列的行为、观测以及奖励信息等与环境\(\mathcal{E}\)进行交互。
+  一般地，环境\(\mathcal{E}\)是一个随机过程。
+  在\(t\)时刻，玩家会从合法的动作集合\(\mathcal{A}=\{1,\dots,K\}\)中选出一个动作\(a_t\)，
+  这一动作会对环境\(\mathcal{E}\)的内部状态以及游戏的分数产生影响。
+  玩家会在\(t\)时刻观测环境\(\mathcal{E}\)得到观测值\(x_t \in \mathbb{R}^d\)，
+  其中\(x_t\)直接或间接地反映了环境\(\mathcal{E}\)在\(t\)时刻的状态信息，
+  例如在一般的视频游戏中，\(x_t\)通常表示\(t\)时刻的游戏画面。
+  同时玩家会在\(t\)时刻得到环境\(\mathcal{E}\)的奖励\(r_t\)，它反映了游戏的分数变化。
+
+  需要注意，游戏的总分数与历史上所有的玩家动作和环境状态都有关，玩家的一次动作可能会对未来产生深远的影响，
+  而且很多时候玩家的动作并不会立即对环境产生影响，而是经过很长时间之后才开始体现。
+  定义状态序列\(s_t=\{x_1,a_1,x_2,\dots,a_{t-1},x_t\}\)，它包含\(t\)时刻前全部的环境状态与玩家动作信息。
+  显然\(s_t\)具有 Markov 性，同时我们很自然地假设游戏最迟会在\(T\)时刻终止，
+  这样\(\{s_1,s_2,\dots,s_T\}\)便构成了一个有限的 Markov 决策过程(MDP)。
+
+  玩家的目标是通过与环境\(\mathcal{E}\)进行交互选择出一系恰当的动作\(\{a_1,a_2,\dots,a_T\}\)使得玩家的收益最大化(游戏得分最大化)。
+  定义\(t\)时刻的未来折扣收益为\(R_t=\sum_{t'=t}^T{\gamma^{t'-t}r_{t'}}\)，
+  其中\(\gamma \in [0, 1)\)称为折扣因子或折扣率(discount factor)。
+  在极限情况下，\(\gamma=0\)，这时\(R_t=r_t\)，即玩家只考虑瞬时收益；
+  相反地，\(\gamma\)越接近1，在决策过程中未来的收益显得越重要。
+  定义优化函数\(Q^{\ast}(s,a)=\max_{\pi}{\mathbb{E}[R_t|s_t=s, a_t=a, \pi]}\)，
+  其中\(\pi\)是决策，它决定玩家会如何对环境作出反应。
+  定义的优化函数在给定\(t\)时刻前全部的状态序列\(s_t\)和\(t\)时刻的玩家行为\(a_t\)后，
+  使得未来折扣收益\(R_t\)期望最大化。
+
+  上文定义的优化函数\(Q\)满足 Bellman 方程：
+  如果在下一时刻的状态序列是\(s'\)并且对于所有可能的动作\(a'\)优化函数\(Q^{\ast}(s',a')\)已知，
+  那么就有：
+  \begin{equation}
+  Q^{\ast}(s,a)=\mathbb{E}_{s'\sim\mathcal{E}}[r+\gamma\max_{a'}{Q^{\ast}(s',a')}|s,a]
+  \end{equation}
+  理论上我们可以使用动态规划的方法通过迭代求解\(Q^{\ast}\)：\(Q_{i+1}(s,a)=\mathbb{E}[r+\gamma\max_{a'}{Q_i(s',a')}|s,a]\)，
+  当 \(i \to \infty\) 时，\(Q_i \to Q^{\ast}\)。
+  但实际上这种方法并不可行，因为我们无法预知未来的状态序列，只能根据当前的状态序列计算优化函数。
+  不过我们可以设法对优化函数进行估计：令\(Q(s,a;\theta) \approx Q^{\ast}(s,a)\)，
+  其中\(\theta\)是神经网络(称为 Q-网络)的权值(weight)。
+  定义第i次迭代时的误差函数：
+  \begin{equation}
+  L_i(\theta_i)=\mathbb{E}_{s,a\sim\rho(.)}[(y_i-Q(s,a;\theta_i))^2]
+  \end{equation}
+  其中：\(y_i=\mathbb{E}_{s'\sim\mathcal{E}}[r+\gamma\max_{a'}Q(s',a';\theta_{i-1})|s,a]\)是第i次迭代时的目标(target)，
+  \(\rho(s,a)\)是状态序列\(s\)和动作\(a\)的概率分布，称这一分布为行为分布(behaviour distribution)。
+  在第i次迭代时，上一步的权值\(\theta_{i-1}\)保持不变。对误差函数关于权值求梯度可得：
+  #+name: eq:nabla_L
+  \begin{equation}
+  \nabla_{\theta_i}L_i(\theta_i)=\mathbb{E}_{\substack{s,a \sim \rho(.)\\ s'\sim \mathcal{E}}}
+  [(r+\gamma\max_{a'}Q(s',a';\theta_{i-1})-Q(s,a;\theta_i))\nabla_{\theta_i}Q(s,a;\theta_i)]
+  \end{equation}
+
+  在算法\ref{alg:DQN}中，我们采用了\epsilon-贪心策略(\epsilon-greedy policy)：
+  在决定玩家行动时，以\(1-\epsilon\)的概率通过神经网络选择一个收益最大的行动，以\(\epsilon\)的概率随机选择一个行动。
+  其中\(0 \le \epsilon \le 1\)，这样玩家既可以利用已有知识作出决策，又有一定概率随机作出行动去探索环境\(\mathcal{E}\)。
+  同时，我们还采用了经验回放(experience replay)策略：
+  我们将玩家在不同时刻的经验\(e_t=(s_t,a_t,r_t,s_{t+1})\)存在数据集\(\mathcal{D}=\{e_1,e_2,\dots,e_N\}\)中，
+  数据集\(\mathcal{D}\)被称作回放记忆(replay memory)。
+  算法每次迭代时会从回放记忆\(\mathcal{D}\)中随机选择一个批次的经验用来训练神经网络，
+  这样可以减少游戏中连续帧的强相关性对训练过程的影响，从而提高训练的收敛速度。
+  由于状态序列\(s\)的长度可变，它不适合作为神经网络的输入，
+  实际上在算法中我们首先对状态序列\(s\)做了预处理，将处理后的结果\(\phi(s)\)作为神经网络的输入。
+  该算法的空间复杂度为\(\mathcal{O}(N)\)，时间复杂度为\(\mathcal{O}(M T K)\)。
+  \begin{algorithm}[H]
+  \caption{具有经验回放能力的深度增强学习算法}
+  \label{alg:DQN}
+  \begin{algorithmic}[1]
+  \STATE 初始化回放记忆\(\mathcal{D}\)容量为\(N\)
+  \STATE 初始化优化函数\(Q\)权值设为随机数
+  \FOR{\(\texttt{episode}=1\) \TO \(M\)}
+    \STATE \(s_1=\{x_1\}\)
+    \STATE \(\phi_1=\phi(s_1)\)
+    \FOR{\(t=1\) \TO \(T\)}
+      \STATE \( a_t=
+                \begin{cases}
+                \text{随机动作} & \quad\text{概率为 }\epsilon\\
+                \max_{a}{Q^{\ast}(\phi(s_t),a;\theta)} & \quad\text{概率为 } 1-\epsilon
+                \end{cases}
+             \)
+      \STATE 执行动作\(a_t\)并记录收益\(r_t\)和环境\(\mathcal{E}\)的观测值\(x_{t+1}\)
+      \STATE \(s_{t+1}=\{s_t,a_t,x_{t+1}\}\)
+      \STATE \(\phi_{t+1}=\phi(s_{t+1})\)
+      \STATE 将经验\((\phi_t,a_t,r_t,\phi_{t+1})\)记录到回放记忆\(\mathcal{D}\)中
+      \STATE 从回放记忆\(\mathcal{D}\)中随机选出样本\((\phi_j,a_j,r_j,\phi_{j+1})\)
+      \STATE \( y_i=
+                \begin{cases}
+                r_j & \quad \text{若 }\phi_{j+1}\text{终止}\\
+                r_j+\gamma\max_{a'}{Q(\phi_{j+1},a_j;\theta)} & \quad \text{若 }\phi_{j+1}\text{非终止}
+                \end{cases}
+             \)
+      \STATE 根据方程\ref{eq:nabla_L}对\((y_i-Q(\phi_i,a_j;\theta))^2\)做梯度下降优化
+    \ENDFOR
+  \ENDFOR
+  \end{algorithmic}
+  \end{algorithm}
+* 实验
+** 基于深度增强学习的平衡杆控制
+   考虑二维的平衡杆控制问题\cite{DBLP:journals/corr/BrockmanCPSSTZ16}：
+   游戏环境\(\mathcal{E}\)是一个二维的平衡杆控制系统，
+   小车上载有一个直立的杆子，杆子受重力影响。
+   玩家可以控制小车沿水平方向向左(0)或向右(1)移动，即玩家的动作集合为：\(\mathcal{A}=\{0, 1\}\)。
+   若杆子滑倒或者小车移动出左右边界，则游戏结束。
+   游戏的目的是尽可能通过控制小车的左右移动保持杆子的直立状态。
+   在\(t\)时刻，环境\(\mathcal{E}\)的状态\(x_t\)可以通过平衡杆系统的位移\(\mathbf{x}\)、速度\(\dot{\mathbf{x}}\)、
+   角度\(\mathbf{\theta}\)、角速度\(\dot{\mathbf{\theta}}\)这四个物理参数进行描述所示，
+   即\(x_t=(\mathbf{x},\dot{\mathbf{x}},\mathbf{\theta},\dot{\mathbf{\theta}})\)，如图[[img:cartpole_env]]。
+   如果\(t\)时刻平衡杆保持平衡状态，环境\(\mathcal{E}\)反馈给玩家的奖励为\(r_t=1\)，
+   如果\(t\)时刻平衡杆滑倒或者小车移出边界，环境\(\mathcal{E}\)反馈给玩家的奖励为\(r_t=0\)。
+   #+caption: 描述二维平衡杆状态的四个物理参数：位移\(\mathbf{x}\)、速度\(\dot{\mathbf{x}}\)、
+   #+caption: 角度\(\mathbf{\theta}\)、角速度\(\dot{\mathbf{\theta}}\)。
+   #+name: img:cartpole_env
+   #+attr_latex: :placement [H]
+   [[file:img/cartpole.pdf]]
+   基于算法\ref{alg:DQN}，我们使用 Keras \cite{chollet2015keras} 实现了一个深度增强学习框架，
+   训练出了一个可以完成平衡杆控制的神经网络。
+   神经网络的输入是一个四维向量\(x_t=(\mathbf{x},\dot{\mathbf{x}},\mathbf{\theta},\dot{\mathbf{\theta}})\)，
+   接下来是两个隐层(hidden layer)，每个隐层都是全相连的(fully-connected)且都具有 24 个单元。
+   输出层也是全相连的，具有两个单元，分别对应向左移动和向右移动两种行动。
+   训练用时半小时左右，在普通的笔记本电脑(Lenovo B470)上完成，
+   操作系统是 Archlinux，使用 TensorFlow \cite{tensorflow2015-whitepaper} 进行计算，
+   没有 GPU 加速。实验中\(M=5000\)，\(T=500\)，其中\(M\)和\(T\)的含义见算法\ref{alg:DQN}。
+   TensorFlow 的计算图如图[[img:cartpole_tf]]所示。
+   #+caption: 基于深度增强学习的平衡杆控制神经网络 TensorFlow 计算图。
+   #+name: img:cartpole_tf
+   #+attr_latex: :placement [H]
+   [[file:img/graph_large_attrs_key=_too_large_attrs&limit_attr_size=1024&run=.png]]
+   与算法\ref{alg:DQN}有所不同，实验中的\(\epsilon\)不是一个常量，它随着训练次数的增加而减小。
+   具体地，我们设置了一个衰减因子\(\gamma_\epsilon=0.95\)和\(\epsilon\)最小值\(\epsilon_\text{min}=0.01\)，
+   记\(t\)时刻(\(t>1\))的\(\epsilon\)值为\(\epsilon_t\)，我们令：
+   \[\epsilon_{t+1}=\begin{cases}
+   \gamma_\epsilon\epsilon_t & \quad\text{如果 }\epsilon_t>\epsilon_\text{min}\\
+   \epsilon_\text{min} & \quad\text{如果 }\epsilon_t\le\epsilon_\text{min}
+   \end{cases}\]
+   并令\(\epsilon\)的初始值\(\epsilon_1=1\)。
+   这样，在训练过程中，\(\epsilon\)随游戏次数的变化关系如图[[img:cartpole_epsilon]]所示。
+   刚开始训练时，神经网络没有任何先验知识，只能随机选择一个动作，故设初始值\(\epsilon=1\)。
+   随着训练的进行，神经网络逐渐积累经验，调整权值。
+   通过衰减因子的设置，在\(\epsilon\)达到最小值之前呈指数递减，
+   这样可以使我们的神经网络逐渐适应环境。
+   在训练进行到大约 1000 次时，\(\epsilon\) 达到最小值，之后保持不变。
+   #+begin_src python :exports none
+import pandas as pd
+import matplotlib as mpl
+mpl.use("pgf")
+mpl.rc('text', usetex=True)
+import matplotlib.pyplot as plt
+
+
+with open('workspace/cartpole-logs.txt', 'r') as f:
+    data = f.read().splitlines()
+
+for i in range(len(data)):
+    t = data[i].split(', ')
+    score, epsilon = int(t[1][7:]), float(t[2][3:])
+    data[i] = (score, epsilon)
+
+df = pd.DataFrame(data, columns=['score', 'epsilon'])
+fig, ax = plt.subplots()
+df['epsilon'].plot(ax=ax)
+ax.set_title(r'Probability $\displaystyle\epsilon$')
+ax.set_xlabel(r'Training episodes')
+ax.set_ylabel(r'$\displaystyle\epsilon$')
+fig.savefig('img/cartpole_epsilon.pdf')
+
+fig, (ax0, ax1) = plt.subplots(1, 2, sharey=True)
+df['score'].plot(ax=ax0)
+ax0.set_title('Score per episodes')
+ax0.set_xlabel('Training episodes')
+ax0.set_ylabel('Score')
+s = (df.index.to_series() // 50)
+df.groupby(s).mean()['score'].plot(ax=ax1)
+ax1.set_title('Average score per epochs')
+ax1.set_xlabel('Training epochs')
+fig.savefig('img/cartpole_score.pdf')
+
+with open('workspace/cartpole-play-logs.txt', 'r') as f:
+    data = f.read().splitlines()
+
+for i in range(len(data)):
+    t = data[i].split(', ')
+    data[i] = float(t[1])
+
+df = pd.DataFrame(data, columns=['score'])
+df.describe()
+   #+end_src
+   #+caption: 二维平衡杆游戏玩家随机选择一个动作的概率\(\epsilon\)随游戏次数的变化关系。
+   #+name: img:cartpole_epsilon
+   #+attr_latex: :placement [H]
+   [[file:img/cartpole_epsilon.pdf]]
+   神经网络训练过程中游戏分数随游戏次数的变化关系如图[[img:cartpole_score]]所示。
+   左图描述了二维平衡杆游戏分数随训练次数的变化，
+   由于游戏分数最高是 500，图中分数始终在 0 至 500 之间波动。
+   训练进行到 500 次之前，游戏的分数都比较低，因为这时的 \(\epsilon\) 还比较大，
+   神经网络拟合的还不够好，玩家处于探索阶段。之后的游戏分数显著提升，但也存在较大波动，
+   这主要是由于\(\epsilon\)的影响，玩家有一定概率随机产生行动。
+   我们右以 50 次游戏作为一个训练阶段，计算每 50 次游戏的平均分，绘制了右图。
+   从右图可以看出训练进行到第 10 阶段左右，游戏平均分发生跳跃式增长，
+   之后在比较高的分数区间内波动。
+   最后我们又令\(\epsilon=0\)，即完全由神经网络进行游戏控制，
+   我们让训练后的神经网络进行了 1000 次游戏，
+   分数统计结果如下：平均分 176.5，标准差 18.9，分数最小值是 140，最大值 255。
+   作为比较，我们又进行了 1000 次随机操作的游戏，分数统计结果如下：
+   平均分 21.8，标准差 11.0，分数最小值是 8，最大值 132。
+   可见训练出的神经网络比较好地完成了二维平衡杆的自动控制。
+   #+caption: 左边的图描述了游戏分数随训练次数的变化，右边的图中每 50 次游戏作为一个阶段，
+   #+caption: 描述了游戏每 50 次游戏的平均分数随训练阶段的变化。
+   #+name: img:cartpole_score
+   #+attr_latex: :placement [H]
+   [[file:img/cartpole_score.pdf]]
+   #+begin_src python :exports none
+import gym
+import pandas as pd
+
+
+episodes = 1000
+env = gym.make('CartPole-v1')
+scores = []
+for e in range(episodes):
+    state = env.reset()
+    score = 0
+    done = False
+    while not done:
+        action = env.action_space.sample()
+        state, _, done, _ = env.step(action)
+        score += 1
+    scores.append(score)
+
+df = pd.DataFrame(scores)
+df.describe()
+   #+end_src
+   同时，我们在实验中还发现，很多失败的情况都是由平衡杆向一边运动最后越界导致的。
+   我们分析这是因为在训练的过程中，出现平衡杆越界的情况相对比较少，多数失败情况都是平衡杆倾斜过大滑倒，
+   神经网络没有足够的经验应对越界的情况。如果训练的时间再长一些，神经网络应该能更好的应对越界的情况。
+** 基于图像处理的跳一跳自动操控
+   2017 年 12 月底，微信发布了跳一跳游戏小程序。
+   它的游戏模式与 Flappy Bird 类似，玩家通过触摸屏幕控制小人在盒子之间完成跳跃动作，
+   按压屏幕的时间长短控制小人跳跃距离的远近。如果小人从盒子上掉落下来则游戏失败；
+   如果小人连续跳跃都落在盒子的中心点，得分会按照\(2, 4, 6, \dots\)的数列增长；
+   此外游戏中还有一些特殊的盒子，小人在这些特殊物体上停留足够时间还会有额外的分数奖励。
+
+   为了完成一次完美的跳跃，玩家需要测量出小人与目标盒子中心点的距离，
+   并根据这一距离计算出按压屏幕的时间然后进行跳跃。这一过程的形式化描述如下：
+   首先我们需要检测出小人的初始位置\(P_0(x_0,y_0)\)以及目标盒子中心点的位置\(P_1(x_1,y_1)\)，
+   计算出两点之间的距离\(d(P_0,P1)=\sqrt{(x_0-x_1)^2+(y_0-y_1)^2}\)，
+   假定跳跃距离\(d(P_0,P_1)\)与按压屏幕时间\(t\)成正比关系，即\(d(P_0,P_1)=kt\)，其中\(k\)是比例系数且游戏前已知。
+   这样我们便可以计算出按压屏幕的时间\(t=k^{-1}d(P_0,P_1)\)从而控制小人进行跳跃。
+
+   #+caption: 跳一跳游戏画面图像处理。(a)是原始游戏画面；(b)是经过裁减后的图像，只保留游戏关键部分的画面；
+   #+caption: (c)对裁减后的图像进行轮廓提取；(d)是灰度化的图像；(e)对灰度图进行二值化处理。
+   #+name: img:jump
+   #+attr_latex: :placement [H]
+   [[file:img/jump.pdf]]
+   我们通过使用 adb (Android Debug Bridge)在手机与计算机之间进行双向通信，
+   包括获取游戏画面、发送触摸屏幕指令等。
+   由于小人的颜色在游戏中是不变的，我们可以根据小人的颜色在游戏画面中找出小人的位置\(P_0\)。
+   为了找出目标中心点的位置\(P_1\)我们首先对游戏截图进行图像处理，如图[[img:jump]]所示：
+   图中(a)是通过 adb 获取的原始游戏画面，分辨率\(720 \times 1280\)，8 位 RGBA 图像，
+   对其进行裁减，去掉边缘只保留游戏关键部分的画面得到(b)，再对(b)得到的图片进行轮廓提取(contour detection)得到(c)，
+   然后将(c)由 RGBA 图像转化为灰度图像(d)，最后设定阈值将灰度图转化为二值化后的图像(e)。
+   经过这四步图像处理操作，得到了处理后的游戏图像。由于目标盒子都是规则的几何图形(矩形或圆形)，
+   可以很方便地通过扫面图像找到目标的中心点\(P_1\)，如图[[img:jump_position]]所示。
+   这样，小人位置\(P_0\)和目标盒子中心点位置\(P_1\)都可确定，接下来便可以通过上文描述的算法实现游戏的自动控制，
+   完整过程可见算法\ref{alg:jump_simple}。
+   #+begin_src python :exports none
+from PIL import Image, ImageFilter
+
+
+img = Image.open('img/img088.png')
+img_crop = img.crop((100, 400, 720, 1180))
+img_contour = img_crop.filter(ImageFilter.CONTOUR)
+img_g = img_contour.convert('L')
+threshold = 230
+img_b = img_g.point(lambda x: 0 if x < threshold else 255, mode='1')
+img_crop.save('img/img088_p0.png')
+img_contour.save('img/img088_p1.png')
+img_g.save('img/img088_p2.png')
+img_b.save('img/img088_p3.png')
+   #+end_src
+   #+caption: 确定小人的位置\(P_0\)与目标盒子中心点的位置\(P_1\)。
+   #+caption: 途中蓝色点表示小人的位置\(P_0\)，绿色点表示检测的目标物体顶点，红色点表示目标物体的几何中心点\(P_1\)。
+   #+caption: 由此可以很容易计算出\(P_0\)与\(P_1\)的几何距离，并由此得到触摸屏幕的时间。
+   #+name: img:jump_position
+   #+attr_latex: :placement [H] :width 8cm
+   [[file:img/img088_p4.png]]
+   \begin{algorithm}[H]
+   \caption{基于图像处理的跳一跳自动操控算法}
+   \label{alg:jump_simple}
+   \begin{algorithmic}[1]
+   \STATE 初始化 \(k\)
+   \FOR{\(i = 1\) \TO \(T\)}
+     \STATE 获取游戏画面 \(x_i\)
+     \STATE 根据小人的颜色由左至右由下至上扫描图像\(\phi(x_i)\)，确定小人的位置\(P_0=(x_0, y_0)\)
+     \STATE 对游戏画面 \(x_i\) 进行图像预处理（裁减、轮廓提取、灰度化、二值化），得到处理后的图像\(\phi(x_i)\)
+     \STATE 根据小人的位置确定目标中心点的扫描区域\(\mathcal{A}\)：若小人在图像左边则扫描区域为图像的右半部分；若小人在图像的左边则扫描区域为图像的左半部分
+     \STATE 由上至下由左至右扫面区域\(\mathcal{A}\)，出现黑色像素点时停止记录此时的位置\(A=(x_1, y_1')\)
+     \STATE 以\(A\)为起始点向右下方向沿着黑色轮廓线运动直到无法继续向右下方移动，记录此时的位置\(B=(x_1', y_1)\)
+     \STATE 目标中心点的位置\(P_1=(x_1, y_1)\)
+     \STATE \(d(P_0,P1)=\sqrt{(x_0-x_1)^2+(y_0-y_1)^2}\)
+     \STATE \(t=k^{-1}d(P_0,P_1)\)
+     \STATE 发送时长为\(t\)的触摸屏幕指令完成跳跃动作
+   \ENDFOR
+   \end{algorithmic}
+   \end{algorithm}
+   我们以 1000 分为上限进行游戏实验，如果分数超过 1000 分便人为干预停止游戏。
+   经过多次实验，每次都超过了上限分数人为干预停止。可见该方法很好地实现了跳一跳游戏的自动控制。
+** 基于深度增强学习的跳一跳自动操控
+   正如我们我们在上文所讨论的，对于二维平衡杆控制游戏，由于它的输入只有四个物理参数，
+   当训练进行到 500 次以上时，神经网络便取得了比较理想的游戏成绩。
+   而对于比较复杂的游戏，尤其是直接以游戏画面作为神经网络的输入时，
+   神经网络需要经过非常多的训练才能得到一个比较好的结果。
+   2015 年 Google DeepMind 运用深度增强学习训练神经网络在 Atari 2600 的模拟器上对 49 个游戏进行了实验，
+   他们采集了 5000 万帧游戏画面作为训练数据，耗时 38 天，对每个游戏进行训练，
+   取得了非常令人振奋的结果\cite{mnih2015humanlevel}。
+   #+begin_src python :exports none
+import gym
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def preprocess_observation(obs):
+    mspacman_color = 210 + 164 + 74
+    img = obs[1:176:2, ::2]  # crop and downsize
+    img = img.sum(axis=2)  # to greyscale
+    img[img == mspacman_color] = 0  # Improve contrast
+    img = (img // 3 - 128).astype(np.int8)  # normalize from -128 to 127
+    return img.reshape(88, 80)
+
+
+env = gym.make('MsPacman-v0')
+obs = env.reset()
+p_obs = preprocess_observation(obs)
+fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(14, 10))
+ax0.imshow(obs)
+ax0.set_axis_off()
+ax0.set_title('Original observation (210x160 RGB)')
+ax1.imshow(p_obs, interpolation='nearest', cmap='gray')
+ax1.set_axis_off()
+ax1.set_title('Preprocessed observation (88x80 greyscale)')
+fig.savefig('img/mspacman_obs.png')
+   #+end_src
+   #+caption: Ms. Pac-Man 游戏画面与预处理后的灰度图。
+   #+name: img:mspacman_obs
+   #+attr_latex: :placement [H]
+   [[file:img/mspacman_obs.png]]
+   在训练跳一跳的神经网络之前，我们对 Ms. Pac-Man 进行了训练。
+   Ms. Pac-Man 的游戏画面是 \(210\times160\) 的 RGB 图，我们首先对它进行压缩处理并灰度化，
+   得到\(88\times80\)的灰度图，如图[[img:mspacman_obs]]所示。
+   处理后的图像作为神经网络的输入，神经网络的输出对应玩家可以执行的 9 种动作，
+   神经网络的结构见表[[tab:mspacman_layer]]。
+   #+caption: 训练 Ms. Pac-Man 时使用的神经网络结构。
+   #+name: tab:mspacman_layer
+   #+attr_latex: :placement [H]
+   |---------------------+--------------------+---------|
+   | Layer (type)        | Output Shape       | Param # |
+   |---------------------+--------------------+---------|
+   | conv2d_1 (Conv2D)   | (None, 22, 20, 32) |    2080 |
+   | conv2d_2 (Conv2D)   | (None, 11, 10, 64) |   32832 |
+   | conv2d_3 (Conv2D)   | (None, 11, 10, 64) |   36928 |
+   | flatten_1 (Flatten) | (None, 7040)       |       0 |
+   | dense_1 (Dense)     | (None, 512)        | 3604992 |
+   | dense_2 (Dense)     | (None, 9)          |    4617 |
+   |---------------------+--------------------+---------|
+   由于计算资源比较差（单核 CPU，无 GPU 加速），经过了十多天的训练，结果仍然不是很理想。
+   训练过程中分数变化如图[[img:mspacman_score]]所示。
+   经过了 24077 次游戏，平均分 108.1，标准差 88.8，最低分 40，最高分 3400，
+   神经网络的表现没有比随机操作表现的好多少。
+   我们分析这主要是由于训练过程中，高分的经验太少，神经网络还没有积累足够的高分经验。
+   #+begin_src python :exports none
+import pandas as pd
+import matplotlib.pyplot as plt
+
+with open('workspace/mspacman-logs.txt', 'r') as f:
+    data = f.read().splitlines()
+
+for i in range(len(data)):
+    t = data[i].split(', ')
+    score, epsilon = int(t[1]), float(t[2])
+    data[i] = (score, epsilon)
+
+df = pd.DataFrame(data, columns=['score', 'epsilon'])
+df.describe()
+fig, ax = plt.subplots()
+df['score'].plot(ax=ax)
+ax.set_title('Score per episodes')
+ax.set_xlabel('Training episodes')
+ax.set_ylabel('Score')
+fig.savefig('img/mspacman_score.png')
+   #+end_src
+   #+caption: Ms. Pac-Man 游戏分数随训练次数的变化。
+   #+name: img:mspacman_score
+   #+attr_latex: :placement [H]
+   [[file:img/mspacman_score.png]]
+   由于跳一跳游戏不是在模拟器上进行而是在实际的手机上操作，如果直接采用算法\ref{alg:DQN}训练神经网络将会需要更长的时间。
+   为了解决深度增强学习收敛太慢的问题，我们首先采用监督学习的方法对神经网络进行了预训练。
+   训练跳一跳使用的神经网络结构与训练 Ms. Pac-Man 使用的神经网络结构类似，具体地见表[[tab:jump_layer]]。
+   神经网络的输入是分辨率为\(256 \times 256\)的灰度图，它由原始游戏图像经过裁减压缩并灰度化处理得到。
+   神经网络的输出是一个整数，表示屏幕触摸时间。
+   #+caption: 训练跳一跳时使用的神经网络结构。
+   #+name: tab:jump_layer
+   #+attr_latex: :placement [H]
+   |---------------------+--------------------+----------|
+   | Layer (type)        | Output Shape       |  Param # |
+   |---------------------+--------------------+----------|
+   | conv2d_1 (Conv2D)   | (None, 16, 16, 32) |     2080 |
+   | conv2d_2 (Conv2D)   | (None, 32, 32, 64) |    32832 |
+   | conv2d_3 (Conv2D)   | (None, 32, 32, 64) |    36928 |
+   | flatten_1 (Flatten) | (None, 65536)      |        0 |
+   | dense_1 (Dense)     | (None, 512)        | 33554944 |
+   | dense_2 (Dense)     | (None, 1)          |      513 |
+   |---------------------+--------------------+----------|
+   上文讨论的基于图像处理的跳一跳自动控制方法取得了非常理想的效果，
+   因此，我们使用这种方法获取了大量的游戏画面并标注了每幅图片对应的屏幕触摸时间，将这些数据作为监督学习的训练数据。
+   实验中，我们的训练数据总共有 1384 帧。训练之后我们又标注了 508 幅游戏画面，作为测试数据，测试结果如图[[img:jump_train]]所示。
+   图中 t 是基于图像处理的跳一跳自动控制程序得到的屏幕触摸时间，y 是神经网络给出的屏幕触摸时间。
+   t 的平均值为 596.3，标准差 211.4。y 的平均值为 489.3，标准差 44.5。
+   尽管两者数值上差距比较大，但是他们的变化趋势基本一致，如图[[img:jump_train_30]]所示。
+   #+begin_src python :exports none
+import random
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from PIL import Image
+from keras.models import Sequential
+from keras.layers import Dense, Conv2D, Flatten
+from keras.optimizers import Adam
+
+
+def get_imgpaths(directory):
+    imgpaths = []
+    for f in os.listdir(directory):
+        if f[0] == 'i':
+            imgpaths.append(f)
+    random.shuffle(imgpaths)
+    return imgpaths
+
+
+def get_img_duration(filepath):
+    img = Image.open(filepath)
+    duration = int(filepath[-8:-4])
+    return img, duration
+
+
+def preprocess(img):
+    img = img.crop((0, 400, 720, 1120))
+    img = img.convert('L')
+    img.thumbnail((256, 256))
+    return img
+
+
+def build_model():
+    model = Sequential()
+    model.add(Conv2D(32, (8, 8), strides=4, padding='same',
+                     activation='relu',
+                     input_shape=(256, 256, 1)))
+    model.add(Conv2D(64, (4, 4), strides=2, padding='same',
+                     activation='relu'))
+    model.add(Conv2D(64, (3, 3), strides=1, padding='same',
+                     activation='relu'))
+    model.add(Flatten())
+    model.add(Dense(512, activation='linear'))
+    model.add(Dense(1, activation='linear'))
+    model.compile(loss='mse', optimizer=Adam())
+    return model
+
+
+def pretrain_model(model):
+    games = ['00', '01', '02', '03', '04',
+             '05', '06', '07', '08', '09']
+    for game in games:
+        imgpaths = get_imgpaths('workspace/debug/' + game)
+        x, y = [], []
+        for filename in imgpaths:
+            img, duration = get_img_duration('workspace/debug/{}/{}'
+                                             .format(game, filename))
+            x.append(np.array(preprocess(img)).reshape(256, 256, 1))
+            y.append(duration)
+        model.fit(np.array(x), np.array(y), verbose=1)
+    return model
+
+
+model = build_model()
+model.load_weights('workspace/jump-dqn.h5')
+x, t, y = [], [], []
+for game in ['workspace/debug/10/', 'workspace/debug/11/']:
+    imgpaths = get_imgpaths(game)
+    for filename in imgpaths:
+        img, duration = get_img_duration('{}{}'.format(game, filename))
+        x.append(np.array(preprocess(img)).reshape(256, 256, 1))
+        t.append(duration)
+    y = [a[0] for a in model.predict(np.array(x))]
+
+df = pd.DataFrame({'t': t, 'y': y})
+fig, ax = plt.subplots()
+df.plot(ax=ax)
+ax.set_xlabel('Frame')
+ax.set_ylabel('Duration (ms)')
+ax.set_title('Duration')
+fig.savefig('img/jump_train.png')
+
+fig, ax = plt.subplots()
+df[70:101].plot(style='o--', ax=ax)
+ax.set_xlabel('Frame')
+ax.set_ylabel('Duration (ms)')
+ax.set_title('Duration')
+fig.savefig('img/jump_train_30.png')
+   #+end_src
+   #+caption: 经过预训练后跳一跳神经网络的表现情况。图中 t 是基于图像处理的跳一跳自动控制程序得到的屏幕触摸时间，
+   #+caption: y 是神经网络给出的屏幕触摸时间。
+   #+name: img:jump_train
+   #+attr_latex: :placement [H]
+   [[file:img/jump_train.png]]
+   #+caption: 经过预训练后跳一跳神经网络的表现情况(局部放大)。
+   #+name: img:jump_train_30
+   #+attr_latex: :placement [H]
+   [[file:img/jump_train_30.png]]
+* 结论
+* 参考文献
+  \bibliographystyle{plain}
+  \renewcommand{\refname}{}
+  \bibliography{refs}

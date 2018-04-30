@@ -1,0 +1,150 @@
+#+title: Deep Reinforcement Learning
+#+author: E-Neo
+
+#+startup: beamer
+
+#+latex_class: beamer
+#+latex_class_options: [bigger]
+#+latex_header: \usepackage{xeCJK}
+#+latex_header: \usepackage{minted}
+#+latex_header: \usepackage{algorithm}
+#+latex_header: \usepackage{algorithmic}
+#+latex_header: \setminted{fontsize=\scriptsize}
+#+latex_header: \usepackage{color}
+#+options: h:2 toc:t
+
+#+beamer_header: \AtBeginSection[]{
+#+beamer_header: \begin{frame}<beamer>\frametitle{Outline}\tableofcontents[currentsection]\end{frame}
+#+beamer_header: \subsection{}
+#+beamer_header: }
+
+* 阅读学习工作
+** 文献
+   - 认真研读了 Playing Atari with Deep Reinforcement Learning
+** handson-ml
+   阅读了 Hands-On Machine Learning with Scikit-Learn and TensorFlow 以下章节：
+   - Chapter 1 The Machine Learning Landscape
+   - Chapter 2 End-to-End Machine Learning Project
+   - Chapter 4 Training Models
+   - Chapter 9 Up and Running with TensorFlow
+   - Chapter 10 Introduction to Artificial Neural Networks
+   - Chapter 11 Training Deep Neural Nets
+   - Chapter 13 Convolutional Neural Networks
+   - Chapter 16 Reinforcement Learning
+** 深度学习框架
+   - 通过阅读 handson-ml 以及查询网络学习了 TensorFlow 与 Keras 的基本用法
+   - 通过比较最终选择使用 Keras 构造神经网络
+   - 弄清了 OpenAI Gym 的接口
+* 实验工作
+** 数学描述
+   - \(E\) ：环境
+   - \(a_t\) ：t 时刻的行为，\(A=\{1,\dots,K\}\)： 行为集合
+   - \(x_t \in \mathbb{R}^d\) ：t 时刻的游戏画面
+   - \(r_t\) ：t 时刻的回报（分数）
+   - \(s_t=x_1,a_1,x_2,\dots,a_{t-1},x_t\)：t 时刻的状态（Markov 决策过程）
+   - \(\gamma\)：回报折扣率
+   - \(R_t=\sum_{t'=t}^{T}{\gamma^{t'-t}r_{t'}}\)：t 时刻的未来折扣回报，其中 \(T\) 是游戏结束的时刻
+   - \(Q^{\ast}(s,a)=\max_{\pi}{\mathbb{E}[R_t|s_t=s, a_t=a, \pi]}\)：最优行为函数，其中\(\pi\)是行为策略(policy)
+** 数学描述
+   - \(L_i(\theta_i)=\mathbb{E}_{s,a\sim\rho(.)}[(y_i - Q(s,a;\theta_i))^2]\)：第 i 次迭代时的损失函数，
+     其中 \(y_i=\mathbb{E}_{s'\sim E}[r+\gamma\max_{a'}{Q(s',a';\theta_{i-1})}|s,a]\) 是第 i 次迭代时的目标，
+     \(\rho(s,a)\)是行为分布（behaviour distribution）
+   - \(\nabla_{\theta_i}{L_i(\theta_i)}=\mathbb{E}_{s,a\sim\rho(.);s'\sim E}[(r+\gamma\max_{a'}{Q(s',a';\theta_{i-1}-Q(s,a;\theta_i))})\nabla_{\theta_i}{Q(s,a;\theta_i)}]\)：
+     损失函数\(L_i(\theta_i)\)的梯度
+** 算法
+   \begin{algorithm}[H]
+   \caption{Deep Q-learning with Experience Replay}
+   \scriptsize
+   \begin{algorithmic}
+   \STATE Initialize replay memory \(D\) to capacity \(N\)
+   \STATE Initialize action-value function \(Q\) with random weights
+   \FOR{\(\texttt{episode}=1\) \TO \(M\)}
+     \STATE Initialize sequence \(s_1=\{x_1\}\) and preprocessed sequenced \(\phi_1=\phi(s_1)\)
+     \FOR{\(t=1\) \TO \(T\)}
+       \STATE With probability \(\epsilon\) select a random action \(a_t\)
+       \STATE otherwise select \(a_t=\max_{a}{Q^{\ast}(\phi(s_t),a;\theta)}\)
+       \STATE Execute action \(a_t\) in emulator and observe reward \(r_t\) and image \(x_{t+1}\)
+       \STATE Set \(s_{t+1}=s_t,a_t,x_{t+1}\) and preprocess \(\phi_{t+1}=\phi(s_{t+1})\)
+       \STATE Store transition \((\phi_t,a_t,r_t,\phi_{t+1})\) in \(D\)
+       \STATE Sample random minibatch of transitions \((\phi_j,a_j,r_j,\phi_{j+1})\) from \(D\)
+       \STATE Set \( y_i=
+                     \begin{cases}
+                     r_j & \quad \text{for terminal }\phi_{j+1}\\
+                     r_j+\gamma\max_{a'}{Q(\phi_{j+1},a_j;\theta)} & \quad \text{for non-terminal }\phi_{j+1}
+                     \end{cases}
+                  \)
+       \STATE Perform a gradient descent step on \((y_i-Q(\phi_i,a_j;\theta))^2\)
+     \ENDFOR
+   \ENDFOR
+   \end{algorithmic}
+   \end{algorithm}
+** CartPole-v1
+   #+caption: CartPole-v1 学习结果
+   [[file:img/Screenshot_20180412_201548.png]]
+** CartPole-v1 实验现象
+   - episodes = 1000 用了几分种的时间（我的 GPU 版本太低 TensorFlow 不支持，使用 CPU 版的 TensorFlow）
+   - 训练结果比较理想，一般都是 400+ （满分 500）
+   - 失败情况基本都是移动出界，分析原因可能是迭代次数不够使得出界的情况没有充分学习
+** CartPole-v1 神经网络
+   class Agent:
+   #+begin_src python
+    def _build_model(self):
+        model = Sequential()
+        model.add(Dense(24, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(self.action_size, activation='linear'))
+        model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
+        return model
+   #+end_src
+** CartPole-v1 记忆部分
+   memory 使用 deque 实现
+   #+begin_src python
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
+
+    def replay(self, batch_size):
+        minibatch = random.sample(self.memory, batch_size)
+        for state, action, reward, next_state, done in minibatch:
+            target = reward
+            if not done:
+                target = (reward + self.gamma *
+                          np.amax(self.model.predict(next_state)[0]))
+            target_f = self.model.predict(state)
+            target_f[0][action] = target
+            self.model.fit(state, target_f, epochs=1, verbose=0)
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+   #+end_src
+** CartPole-v1 训练过程关键代码
+   #+begin_src python
+    done = False
+    for e in range(episodes):
+        state = env.reset()
+        state = np.reshape(state, [1, state_size])
+        for score in range(500):
+            action = agent.act(state)
+            next_state, reward, done, _ = env.step(action)
+            reward = reward if not done else -10
+            next_state = np.reshape(next_state, [1, state_size])
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
+            if done:
+                print("episode: {}/{}, score: {}, e: {:.2}"
+                      .format(e, episodes, score, agent.epsilon))
+                break
+        if len(agent.memory) > batch_size:
+            agent.replay(batch_size)
+        if e % 10 == 0:
+            agent.save(filepath)
+   #+end_src
+* 下一步工作计划
+** 工作计划
+   - 准备论文
+   - 实验为主，阅读为辅
+   - 修改 Agent，训练出可以玩 MsPacman 的神经网络(训练过程可能要几个小时)
+   - 获取足够的跳一跳游戏画面数据，尝试将 Agent 移植到跳一跳
+* 参考文献
+** 参考文献
+   - Simon Haykin, Neural Networks and Learning Machines (3rd Edition) (2009)
+   - Aurélien Géron, Hands-On Machine Learning with Scikit-Learn and TensorFlow (2017)
+   - https://keon.io/deep-q-learning/

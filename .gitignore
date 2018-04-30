@@ -1,4 +1,12 @@
 debug/
+logs/
+*-logs.txt
+*.h5
+
 _minted-presentation/
 presentation.tex
 presentation.pdf
+
+_minted-thesis/
+thesis.tex
+thesis.pdf

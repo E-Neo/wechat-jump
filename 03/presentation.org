@@ -1,4 +1,4 @@
-#+title: Deep Reinforcement learning
+#+title: Deep Reinforcement Learning
 #+author: E-Neo
 
 #+startup: beamer
